@@ -122,9 +122,9 @@ def create_zaim_data(request_data):
         return '登録データがありません', None
 
     zaim_data = parse_zaim_data(text)
-    if len(zaim_data.keys()) != 5:
-        return f'登録するための項目が不足しています :{zaim_data}', None
 
+    if not can_register(zaim_data):
+        return f'登録するための項目が不足しています :{zaim_data}', None
     return None, zaim_data
 
 
@@ -160,6 +160,24 @@ def parse_zaim_data(text):
             results['comment'] = f'{word} (Slack登録: {today.year}/{today.month}/{today.day})'
 
     return results
+
+
+def can_register(zaim_data):
+    """ 登録可能かチェックする
+
+    登録可能なのは、以下の条件を満たす
+    ・5項目ある場合
+    ・4項目で、commentがない場合は追加(commentが任意のため)
+    """
+    fields_count = len(zaim_data.keys())
+
+    if fields_count == 5:
+        return True
+
+    if fields_count == 4 and 'comment' not in zaim_data:
+        return True
+
+    return False
 
 
 def get_ids(word):
@@ -219,6 +237,11 @@ def post_zaim(zaim_data):
                        access_token_secret=os.environ['OAUTH_TOKEN_SECRET'])
         api.verify()
 
+        # commentがない場合は、Slackでの登録日をcommentに追加する
+        if 'comment' not in zaim_data:
+            today = datetime.today()
+            zaim_data['comment'] = f'(Slack登録: {today.year}/{today.month}/{today.day})'
+
         # api.payment()の戻り値は以下の通り。そのため、戻り値を使って何かする、ということは無い
         # 正常：レスポンスのJSON内容が返ってくる
         # エラー：例外が出る
@@ -230,7 +253,7 @@ def post_zaim(zaim_data):
             genre_id=zaim_data['genre_id'],
             amount=zaim_data['amount'],
             date=zaim_data['date'],
-            comment=zaim_data['comment']
+            comment=zaim_data['comment'],
         )
         return None
     except Exception as e:
